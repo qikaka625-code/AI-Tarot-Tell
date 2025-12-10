@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mystic Aether Tarot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Noto+Serif+SC:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+      html, body, #root {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background-color: #131314; /* Google AI Studio Dark Background */
+        font-family: 'Roboto', 'Noto Serif SC', sans-serif;
+        color: #e3e3e3;
+      }
+      h1, h2, h3, .serif { font-family: 'Noto Serif SC', serif; }
+      
+      /* --- STUDIO THEME STYLES --- */
+      .studio-panel {
+        background: #1e1f20;
+        border: 1px solid #444746;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+      }
+      
+      .studio-btn {
+        background: #a8c7fa;
+        color: #062e6f;
+        border-radius: 24px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        border: none;
+      }
+      .studio-btn:hover {
+        background: #d3e3fd;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      }
+      
+      .studio-btn-outline {
+        background: transparent;
+        border: 1px solid #8e918f;
+        color: #a8c7fa;
+        border-radius: 24px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+      }
+      .studio-btn-outline:hover {
+        background: rgba(168, 199, 250, 0.08);
+        border-color: #a8c7fa;
+      }
+
+      /* Custom Scrollbar (Subtle) */
+      ::-webkit-scrollbar { width: 8px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #444746; border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background: #5e5e5e; }
+      
+      .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+      .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.2, 0, 0, 1) forwards; }
+      
+      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "three": "https://aistudiocdn.com/three@^0.181.2",
+    "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.1/",
+    "react": "https://aistudiocdn.com/react@^19.2.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0",
+    "@react-three/drei": "https://aistudiocdn.com/@react-three/drei@^10.7.7",
+    "gsap": "https://aistudiocdn.com/gsap@^3.13.0",
+    "@react-three/fiber": "https://aistudiocdn.com/@react-three/fiber@^9.4.2"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root">
+      <!-- Loading State -->
+      <div class="flex items-center justify-center w-full h-full text-[#a8c7fa] font-serif bg-[#131314]">
+        <span class="animate-pulse tracking-widest text-lg">INITIALIZING SYSTEM...</span>
+      </div>
+    </div>
+  </body>
+</html>

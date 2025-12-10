@@ -1,0 +1,5 @@
+{
+  "name": "AI-Tarot-Tell",
+  "description": "A 3D immersive Tarot reading application featuring procedural card art, GSAP animations, and AI-powered card visualization editing using Gemini 2.5 Flash Image.",
+  "requestFramePermissions": []
+}
