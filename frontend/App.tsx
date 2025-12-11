@@ -4,6 +4,7 @@ import { DECK, SPREADS, TRANSLATIONS } from './constants';
 import { AppState, CardState, SpreadDef, Language } from './types';
 import Scene from './components/Scene';
 import { getTarotReading, getFullSpreadReading } from './services/geminiService';
+import { login } from './services/authService';
 
 // --- ANIMATION CONSTANTS ---
 const CAMERA_TILT_X = 0.28; 
@@ -37,14 +38,68 @@ const parseInlineFormatting = (text: string) => {
     return parts.map((part, i) => part.startsWith('**') && part.endsWith('**') ? <strong key={i} className="text-[#d3e3fd] font-bold mx-1">{part.slice(2, -2)}</strong> : part.replace(/\*/g, ''));
 };
 
+const getInitialLanguage = (): Language => {
+  const stored = typeof window !== 'undefined' ? localStorage.getItem('language') : null;
+  if (stored === Language.CN || stored === Language.VN) return stored as Language;
+  return Language.VN;
+};
+
+const createInitialDeck = (): CardState[] => {
+  const base = DECK.map((data) => ({
+    data,
+    isReversed: false,
+    isFlipped: false,
+    position: [0, -10, -5] as [number, number, number],
+    rotation: [0, Math.PI, 0] as [number, number, number],
+    uuid: uuidv4()
+  }));
+
+  // Position first 3 cards for Intro Display (Fool, Magician, Priestess)
+  if (base[0]) {
+    base[0].position = [-4, 0, 0];
+    base[0].rotation = [CAMERA_TILT_X, 0, 0];
+    base[0].isFlipped = true;
+  }
+  if (base[1]) {
+    base[1].position = [0, 0, 0];
+    base[1].rotation = [CAMERA_TILT_X, 0, 0];
+    base[1].isFlipped = true;
+  }
+  if (base[2]) {
+    base[2].position = [4, 0, 0];
+    base[2].rotation = [CAMERA_TILT_X, 0, 0];
+    base[2].isFlipped = true;
+  }
+  return base;
+};
+
+const loadJson = (key: string) => {
+  if (typeof window === 'undefined') return null;
+  const raw = localStorage.getItem(key);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
+
 const App = () => {
   const [appState, setAppState] = useState<AppState>(AppState.INTRO);
   const [selectedSpread, setSelectedSpread] = useState<SpreadDef>(SPREADS[1]); // Default to 3 Card
-  const [language, setLanguage] = useState<Language>(Language.CN);
-  const [deck, setDeck] = useState<CardState[]>([]);
+  const [language, setLanguage] = useState<Language>(getInitialLanguage());
+  const [deck, setDeck] = useState<CardState[]>(() => createInitialDeck());
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  
+  const [authToken, setAuthToken] = useState<string | null>(() => (typeof window !== 'undefined' ? localStorage.getItem('authToken') : null));
+  const [currentUser, setCurrentUser] = useState<any>(() => loadJson('currentUser'));
+  const [usage, setUsage] = useState<any>(() => loadJson('usage'));
+  const [showLogin, setShowLogin] = useState(false);
+  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+
   // Reading States
   const [readings, setReadings] = useState<Record<string, string>>({});
   const [isLoadingReading, setIsLoadingReading] = useState(false);
@@ -53,6 +108,85 @@ const App = () => {
   const [isGeneratingFull, setIsGeneratingFull] = useState(false);
 
   const t = TRANSLATIONS[language];
+  const brandName = React.useMemo(() => {
+    const poolCN = ["ASTRAL TAROT ✦ 星界秘牌", "VOID ARCANA ✦ 星尘占卜", "NOVA TAROT ✦ 幻耀之眼"];
+    const poolVN = ["ASTRAL TAROT ✦ BÍ ẨN", "VOID ARCANA ✦ MA TRẬN", "NOVA TAROT ✦ HUYỀN ẢO"];
+    const pool = language === Language.CN ? poolCN : poolVN;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }, [language]);
+
+  const syncUsage = (value: any) => {
+    setUsage(value);
+    try { localStorage.setItem('usage', JSON.stringify(value)); } catch {}
+  };
+
+  useEffect(() => {
+    try { localStorage.setItem('language', language); } catch {}
+  }, [language]);
+
+  useEffect(() => {
+    if (!authToken) {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('currentUser');
+      localStorage.removeItem('usage');
+      return;
+    }
+    try {
+      localStorage.setItem('authToken', authToken);
+      if (currentUser) localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    } catch {}
+  }, [authToken, currentUser]);
+
+  // Track fullscreen change (ESC to exit)
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', handler);
+    return () => document.removeEventListener('fullscreenchange', handler);
+  }, []);
+
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+        setIsFullscreen(true);
+      } else {
+        await document.exitFullscreen();
+        setIsFullscreen(false);
+      }
+    } catch (e) {
+      setNotice(language === Language.VN ? 'Không thể bật toàn màn hình' : '无法切换全屏');
+    }
+  };
+
+  const handleLogout = () => {
+    setAuthToken(null);
+    setCurrentUser(null);
+    setUsage(null);
+    setShowLogin(false);
+  };
+
+  const handleLogin = async () => {
+    setLoginError(null);
+    try {
+      const res = await login(loginForm.username.trim(), loginForm.password);
+      setAuthToken(res.token);
+      setCurrentUser(res.user);
+      syncUsage(res.usage);
+      setShowLogin(false);
+      setNotice(language === Language.VN ? 'Đăng nhập thành công' : '登录成功');
+    } catch (err: any) {
+      setLoginError(err.message || (language === Language.VN ? 'Đăng nhập thất bại' : '登录失败'));
+    }
+  };
+
+  const requireAuth = () => {
+    if (!authToken) {
+      setShowLogin(true);
+      setNotice(language === Language.VN ? 'Vui lòng đăng nhập để xem giải bài' : '请先登录后再解读');
+      return false;
+    }
+    return true;
+  };
 
   // Helper to get localized string from card
   const getCardName = (card: CardState) => language === Language.VN ? card.data.name_vn : card.data.name_cn;
@@ -65,33 +199,6 @@ const App = () => {
     const spreadCards = deck.slice(0, selectedSpread.positions.length);
     return spreadCards.every(c => c.isFlipped);
   }, [deck, selectedSpread]);
-
-  // Initial Setup: Create Deck and position 3 Hero cards
-  useEffect(() => {
-    const initialDeck: CardState[] = DECK.map((data, index) => ({
-      data,
-      isReversed: false,
-      isFlipped: false,
-      position: [0, -10, -5], // Default hidden below
-      rotation: [0, Math.PI, 0],
-      uuid: uuidv4()
-    }));
-
-    // Position first 3 cards for Intro Display (Fool, Magician, Priestess)
-    initialDeck[0].position = [-4, 0, 0];
-    initialDeck[0].rotation = [CAMERA_TILT_X, 0, 0]; // Face up
-    initialDeck[0].isFlipped = true;
-
-    initialDeck[1].position = [0, 0, 0];
-    initialDeck[1].rotation = [CAMERA_TILT_X, 0, 0];
-    initialDeck[1].isFlipped = true;
-
-    initialDeck[2].position = [4, 0, 0];
-    initialDeck[2].rotation = [CAMERA_TILT_X, 0, 0];
-    initialDeck[2].isFlipped = true;
-
-    setDeck(initialDeck);
-  }, []);
 
   // --- VORTEX SHUFFLE ANIMATION ---
   const startShuffle = useCallback(async () => {
@@ -193,18 +300,27 @@ const App = () => {
 
   const fetchReading = async (card: CardState, positionLabel: string) => {
     if (!selectedSpread) return;
+    if (!requireAuth() || !authToken) return;
     setIsLoadingReading(true);
     try {
-        const reading = await getTarotReading(
-            getCardName(card), 
-            positionLabel, 
-            selectedSpread.name, 
+        const readingRes = await getTarotReading(
+            getCardName(card),
+            positionLabel,
+            selectedSpread.name,
             card.isReversed,
-            language
+            language,
+            authToken
         );
-        setReadings(prev => ({ ...prev, [card.uuid]: reading }));
-    } catch (error) {
-        console.error("Reading error", error);
+        setReadings(prev => ({ ...prev, [card.uuid]: readingRes.text }));
+        if (readingRes.usage) syncUsage(readingRes.usage);
+    } catch (error: any) {
+        if (error?.message === 'AUTH_REQUIRED') {
+            setShowLogin(true);
+        } else if (error?.message === 'QUOTA_EXCEEDED') {
+            setNotice(language === Language.VN ? 'Hết lượt gọi' : '调用次数已用完');
+        } else {
+            setNotice(language === Language.VN ? 'Kết nối thất bại' : '连接错误');
+        }
     } finally {
         setIsLoadingReading(false);
     }
@@ -221,6 +337,10 @@ const App = () => {
 
   const handleFullReading = async () => {
     if (!selectedSpread) return;
+    if (!requireAuth() || !authToken) {
+        setShowFullReading(false);
+        return;
+    }
     setShowFullReading(true);
     if (fullReadingText) return;
 
@@ -233,10 +353,17 @@ const App = () => {
             isReversed: c.isReversed,
             meaning: language === Language.VN ? c.data.meaning_upright_vn : c.data.meaning_upright_cn
         }));
-        const text = await getFullSpreadReading(selectedSpread.name, cardsInfo, language);
-        setFullReadingText(text);
-    } catch (e) {
-        setFullReadingText(t.connectError);
+        const textRes = await getFullSpreadReading(selectedSpread.name, cardsInfo, language, authToken);
+        setFullReadingText(textRes.text);
+        if (textRes.usage) syncUsage(textRes.usage);
+    } catch (e: any) {
+        if (e?.message === 'AUTH_REQUIRED') {
+            setShowLogin(true);
+        } else if (e?.message === 'QUOTA_EXCEEDED') {
+            setFullReadingText(language === Language.VN ? 'Hết lượt gọi' : t.connectError);
+        } else {
+            setFullReadingText(t.connectError);
+        }
     } finally {
         setIsGeneratingFull(false);
     }
@@ -264,11 +391,22 @@ const App = () => {
       {/* UI Layer */}
       <div className="absolute inset-0 z-50 pointer-events-none flex flex-col justify-between p-6">
         
+        {notice && (
+          <div className="absolute top-4 left-0 right-0 flex justify-center z-[70] pointer-events-auto">
+            <div
+              className="bg-[#1e1f20]/95 border border-[#444746] px-4 py-2 rounded-full text-sm text-[#e3e3e3] shadow"
+              onClick={() => setNotice(null)}
+            >
+              {notice}
+            </div>
+          </div>
+        )}
+
         {/* Header - Left */}
         <header className="absolute top-6 left-6 z-50 pointer-events-auto transition-opacity duration-500" style={{ opacity: showFullReading ? 0 : 1 }}>
             <div className="bg-[#1e1f20]/90 backdrop-blur-md px-6 py-2 rounded-full border border-[#444746] shadow-lg">
                 <h1 className="text-xl text-[#e3e3e3] font-serif tracking-widest uppercase flex items-center gap-2">
-                    <span className="text-[#a8c7fa] text-lg">❖</span> {t.title}
+                    <span className="text-[#a8c7fa] text-lg animate-pulse">✦</span> {brandName}
                 </h1>
             </div>
         </header>
@@ -324,6 +462,42 @@ const App = () => {
                     </div>
                 )}
              </div>
+
+             <div className="bg-[#1e1f20]/90 backdrop-blur-md rounded-full border border-[#444746] flex items-center gap-3 px-4">
+                {authToken ? (
+                  <>
+                    <div className="flex flex-col leading-tight text-xs text-[#c4c7c5]">
+                      <span className="text-[#e3e3e3] font-semibold">{currentUser?.name || currentUser?.username || 'User'}</span>
+                      <span className="text-[10px] text-[#8e918f]">
+                        {(language === Language.VN ? 'Còn: ' : '剩余: ')}
+                        {usage?.remaining ?? '-'} / {usage?.limit ?? '-'}
+                      </span>
+                    </div>
+                    <button
+                      onClick={handleLogout}
+                      className="px-3 py-1 text-xs rounded-full bg-[#303132] text-[#e3e3e3] hover:bg-[#444746] transition-colors"
+                    >
+                      {language === Language.VN ? 'Đăng xuất' : '退出'}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => setShowLogin(true)}
+                    className="px-4 py-2 text-xs font-bold transition-colors text-[#e3e3e3] hover:bg-[#303132]"
+                  >
+                    {language === Language.VN ? 'Đăng nhập' : '登录'}
+                  </button>
+                )}
+             </div>
+
+             <button
+               onClick={toggleFullscreen}
+               className="studio-panel h-full px-3 py-2 flex items-center gap-2 hover:bg-[#303132] transition-colors text-[#e3e3e3] text-sm border border-[#444746]"
+               title={language === Language.VN ? 'Toàn màn hình (ESC để thoát)' : '全屏（ESC退出）'}
+             >
+               <span className="text-lg">{isFullscreen ? '⤢' : '⤢'}</span>
+               <span className="hidden md:inline">{isFullscreen ? (language === Language.VN ? 'Thoát' : '退出') : (language === Language.VN ? 'Toàn màn' : '全屏')}</span>
+             </button>
         </div>
 
 
@@ -443,6 +617,48 @@ const App = () => {
                     </div>
                 </div>
             </div>
+        )}
+
+        {showLogin && (
+          <div className="fixed inset-0 z-[120] pointer-events-auto flex items-center justify-center bg-[#0c0d0f]/80 backdrop-blur-sm">
+            <div className="w-[360px] bg-[#1e1f20] border border-[#444746] rounded-xl shadow-2xl p-6 space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg text-[#e3e3e3] font-semibold">{language === Language.VN ? 'Đăng nhập' : '登录'}</h3>
+                <button className="text-[#8e918f] hover:text-[#e3e3e3]" onClick={() => setShowLogin(false)}>✕</button>
+              </div>
+              <div className="space-y-3">
+                <input
+                  value={loginForm.username}
+                  onChange={(e) => setLoginForm(prev => ({ ...prev, username: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg bg-[#28292a] border border-[#444746] text-[#e3e3e3] text-sm focus:outline-none focus:border-[#a8c7fa]"
+                  placeholder={language === Language.VN ? 'Tên đăng nhập' : '用户名'}
+                />
+                <input
+                  type="password"
+                  value={loginForm.password}
+                  onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg bg-[#28292a] border border-[#444746] text-[#e3e3e3] text-sm focus:outline-none focus:border-[#a8c7fa]"
+                  placeholder={language === Language.VN ? 'Mật khẩu' : '密码'}
+                />
+              </div>
+              {loginError && <p className="text-xs text-red-300">{loginError}</p>}
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setShowLogin(false)}
+                  className="px-3 py-2 text-xs rounded-lg border border-[#444746] text-[#c4c7c5] hover:bg-[#303132] transition-colors"
+                >
+                  {language === Language.VN ? 'Hủy' : '取消'}
+                </button>
+                <button
+                  onClick={handleLogin}
+                  className="px-3 py-2 text-xs rounded-lg bg-[#a8c7fa] text-[#062e6f] hover:bg-[#d3e3fd] transition-colors font-bold"
+                >
+                  {language === Language.VN ? 'Đăng nhập' : '登录'}
+                </button>
+              </div>
+              <p className="text-[11px] text-[#8e918f]">{language === Language.VN ? 'Có thể xem trước, cần đăng nhập để gọi AI.' : '未登录可浏览，但需登录才能调用解读。'}</p>
+            </div>
+          </div>
         )}
 
       </div>

@@ -1,0 +1,16 @@
+[Unit]
+Description=AI Tarot Tell Backend
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/LUMOS AI/AI-Tarot-Tell/backend
+EnvironmentFile=/root/LUMOS AI/AI-Tarot-Tell/backend/.env
+ExecStartPre=/usr/bin/npm install
+ExecStart=/usr/bin/npm run start
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

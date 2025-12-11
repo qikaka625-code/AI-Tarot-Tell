@@ -1,0 +1,18 @@
+[Unit]
+Description=AI Tarot Tell Frontend
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/LUMOS AI/AI-Tarot-Tell/frontend
+Environment=HOST=0.0.0.0
+Environment=PORT=3701
+ExecStartPre=/usr/bin/npm install
+ExecStartPre=/usr/bin/npm run build
+ExecStart=/usr/bin/npm run preview -- --host 0.0.0.0 --port 3701
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
