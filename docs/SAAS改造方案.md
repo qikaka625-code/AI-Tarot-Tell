@@ -81,12 +81,13 @@ systemctl enable --now ai-tarot-frontend.service
 ```
 
 ## 环境变量
-- 后端 `.env`（已写入提供的密钥）：
+- 后端 `.env`（需要配置）：
   - `PORT=3702`
   - `HOST=0.0.0.0`
   - `CORS_ORIGIN=http://162.0.231.96:3701,http://localhost:3701`
   - `DB_PATH=./data/ai-tarot.db`
-  - `GEMINI_API_KEY=AIzaSyCMJiydFAjORFXa2q2EslB9bsQUEY4wRho`
+  - `GEMINI_API_KEY=你的Gemini_API密钥`
+  - `ADMIN_SECRET_KEY=你的Admin管理密钥`
 - 前端 `.env`：`VITE_API_BASE_URL=http://162.0.231.96:3702`
 
 ## 产品行为
