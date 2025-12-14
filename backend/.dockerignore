@@ -1,6 +1,7 @@
 node_modules
 dist
-npm-debug.log*
-yarn-error.log*
+npm-debug.log
 .env
-
+data/*.db
+data/*.db-wal
+data/*.db-shm

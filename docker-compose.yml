@@ -6,7 +6,7 @@ services:
     env_file:
       - ./backend/.env
     ports:
-      - "127.0.0.1:3702:3702"
+      - "3702:3702"
     volumes:
       - ./backend/data:/app/data
     restart: unless-stopped

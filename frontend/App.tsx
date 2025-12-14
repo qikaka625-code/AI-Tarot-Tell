@@ -200,27 +200,30 @@ const App = () => {
     return spreadCards.every(c => c.isFlipped);
   }, [deck, selectedSpread]);
 
-  // --- VORTEX SHUFFLE ANIMATION ---
+  // --- ENHANCED VORTEX SHUFFLE ANIMATION ---
   const startShuffle = useCallback(async () => {
     if (appState === AppState.SHUFFLING) return;
     
-    // 1. Reset the 3 intro cards to face down and join the "pile" center
+    // 1. Reset the 3 intro cards to face down and gather to center
     setDeck(prev => prev.map(c => ({
         ...c,
         isFlipped: false,
-        // Move to center before vortex
-        position: [0, 0, 0] as [number, number, number],
-        rotation: [0, Math.PI, 0] as [number, number, number] 
+        // Move to center before vortex - slight spread for visual appeal
+        position: [(Math.random() - 0.5) * 2, 0, (Math.random() - 0.5) * 0.5] as [number, number, number],
+        rotation: [0, Math.PI, (Math.random() - 0.5) * 0.2] as [number, number, number] 
     })));
 
     await wait(600); // Wait for cards to center
 
     setAppState(AppState.SHUFFLING);
 
-    // 2. The Vortex happens automatically in TarotCard.tsx
-    await wait(2500); 
+    // 2. The 5-second Vortex animation runs in TarotCard.tsx
+    // Phase 1: Gather & Lift (0.8s)
+    // Phase 2: Spiral Vortex (3.4s) 
+    // Phase 3: Settle (0.8s)
+    await wait(5500); // 5 seconds animation + buffer
 
-    // 3. Randomize deck logic
+    // 3. Randomize deck with mystical shuffle
     const shuffledDeck = [...deck].sort(() => Math.random() - 0.5);
     const finalDeck = shuffledDeck.map((c, i) => ({
         ...c,

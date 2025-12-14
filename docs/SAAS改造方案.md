@@ -86,7 +86,7 @@ systemctl enable --now ai-tarot-frontend.service
   - `HOST=0.0.0.0`
   - `CORS_ORIGIN=http://162.0.231.96:3701,http://localhost:3701`
   - `DB_PATH=./data/ai-tarot.db`
-  - `GEMINI_API_KEY=AIzaSyCy0Q7wWVdxzoHb5TZkFFrGUsuyEUI6_CY`
+  - `GEMINI_API_KEY=AIzaSyCMJiydFAjORFXa2q2EslB9bsQUEY4wRho`
 - 前端 `.env`：`VITE_API_BASE_URL=http://162.0.231.96:3702`
 
 ## 产品行为

@@ -8,6 +8,7 @@ import {
   getUserByToken,
   getUserByUsername,
   incrementUsage,
+  hashPassword,
   UserRecord,
 } from "./db.js";
 import {
@@ -15,12 +16,14 @@ import {
   TarotReadingRequest,
   LoginResponse,
 } from "./types.js";
+import { createUser, manageQuota, updateStatus, resetPassword, getUserInfo, listUsers } from './adminService.js';
 
 dotenv.config({ path: path.join(process.cwd(), "backend", ".env") });
 
 const app = express();
 const PORT = Number(process.env.PORT || 3702);
 const HOST = process.env.HOST || "0.0.0.0";
+const ADMIN_SECRET_KEY = process.env.ADMIN_SECRET_KEY || 'REPLACE_WITH_YOUR_SECRET';
 
 const corsOrigin = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
@@ -33,7 +36,7 @@ app.use(
 );
 app.use(express.json({ limit: "2mb" }));
 
-const apiKey = process.env.GEMINI_API_KEY || "";
+const apiKey = process.env.GEMINI_API_KEY;
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 interface AuthedRequest extends express.Request {
@@ -78,7 +81,13 @@ app.post("/api/auth/login", (req, res) => {
   }
 
   const user = getUserByUsername(username);
-  if (!user || user.password !== password) {
+  if (!user) {
+    return res.status(401).json({ message: "用户名或密码错误" });
+  }
+
+  // 支持明文和哈希密码验证
+  const hashed = hashPassword(password);
+  if (user.password !== password && user.password !== hashed) {
     return res.status(401).json({ message: "用户名或密码错误" });
   }
 
@@ -274,7 +283,98 @@ Length: 600-800 words.`;
   }
 );
 
+// ========== Admin 鉴权中间件 ==========
+const adminAuthMiddleware: RequestHandler = (req, res, next) => {
+  const secret = req.headers['x-admin-secret-key'];
+  if (!secret || secret !== ADMIN_SECRET_KEY) {
+    return res.status(401).json({ message: 'Admin secret invalid' });
+  }
+  next();
+};
+
+// ========== Admin 单一入口调度 ==========
+app.post('/api/admin/dispatch', adminAuthMiddleware, async (req, res) => {
+  const { action, params } = req.body || {};
+  try {
+    switch (action) {
+      case 'create_user': {
+        const user = createUser(params);
+        return res.json({ user });
+      }
+      case 'manage_quota': {
+        const user = manageQuota(params);
+        return res.json({ user });
+      }
+      case 'update_status': {
+        const user = updateStatus(params);
+        return res.json({ user });
+      }
+      case 'reset_password': {
+        const result = resetPassword(params);
+        return res.json(result);
+      }
+      case 'get_user_info': {
+        const user = getUserInfo(params);
+        return res.json({ user });
+      }
+      case 'list_users': {
+        const users = listUsers(params);
+        return res.json({ users });
+      }
+      default:
+        return res.status(400).json({ message: 'Invalid Action' });
+    }
+  } catch (error: any) {
+    console.error('Admin dispatch error:', error);
+    return res.status(400).json({ message: error?.message || 'Bad Request' });
+  }
+});
+
+// ========== Admin 统计接口 ==========
+app.get('/api/admin/stats', adminAuthMiddleware, async (_req, res) => {
+  try {
+    const db = (await import('./db.js')).default;
+    const users = db.prepare("SELECT * FROM users WHERE status != 'deleted'").all() as UserRecord[];
+    const totalUsers = users.length;
+    const activeUsers = users.filter((u) => u.status === 'active').length;
+    const totalCalls = users.reduce((sum, u) => sum + (u.usage_used || 0), 0);
+    
+    res.json({
+      todayCalls: totalCalls,
+      totalUsers: totalUsers,
+      activeUsers: activeUsers,
+      revenue: 0,
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: 'Statistics fetch failed' });
+  }
+});
+
+// ========== Admin 用户搜索接口 ==========
+app.get('/api/admin/users/search', adminAuthMiddleware, async (req, res) => {
+  try {
+    const keyword = (req.query.keyword as string) || '';
+    const db = (await import('./db.js')).default;
+    const users = db.prepare(`
+      SELECT * FROM users 
+      WHERE (username LIKE ? OR phone LIKE ? OR email LIKE ?)
+      AND status != 'deleted'
+      LIMIT 20
+    `).all(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`) as UserRecord[];
+    
+    const sanitized = users.map((u) => {
+      const { password, ...safe } = u;
+      return safe;
+    });
+    
+    res.json(sanitized);
+  } catch (error: any) {
+    res.status(500).json({ message: 'Search failed' });
+  }
+});
+
 app.listen(PORT, HOST, () => {
   console.log(`AI-Tarot-Tell backend listening on http://${HOST}:${PORT}`);
+  console.log(`🔐 Admin Secret Key: ${ADMIN_SECRET_KEY ? "✅ Configured" : "❌ Missing"}`);
 });
 
